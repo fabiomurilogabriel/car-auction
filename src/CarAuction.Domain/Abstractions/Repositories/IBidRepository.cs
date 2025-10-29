@@ -12,7 +12,9 @@ namespace CarAuction.Domain.Abstractions.Repositories
         Task<Bid> GetByIdAsync(Guid id);
         Task<IEnumerable<Bid>> GetByAuctionIdAsync(Guid auctionId);
         Task<long> GetNextSequenceAsync(Guid auctionId);
-        Task<Guid> AddAsync(Bid bid);
+        Task<Guid> CreateAsync(Bid bid);
         Task<IEnumerable<Bid>> GetBidsMadeDuringPartitionWithinAuctionDeadlineAsync(Guid auctionId, DateTime auctionEndDate);
+        Task UpdateAsync(Bid bid);
+        Task UpdateRangeAsync(IEnumerable<Bid> bids);
     }
 }

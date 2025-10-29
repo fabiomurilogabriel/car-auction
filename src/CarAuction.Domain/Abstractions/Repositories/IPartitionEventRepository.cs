@@ -7,7 +7,7 @@ namespace CarAuction.Domain.Abstractions.Repositories
     {
         Task<PartitionEvent> GetCurrentPartitionAsync();
         Task<PartitionEvent> GetCurrentPartitionByAuctionRegionAsync(Region auctionRegion);
-        Task<Guid> AddAsync(PartitionEvent partitionEvent);
+        Task<Guid> CreateAsync(PartitionEvent partitionEvent);
         Task UpdateAsync(PartitionEvent partitionEvent);
         Task<IEnumerable<PartitionEvent>> GetHistoryAsync(DateTime since);
     }

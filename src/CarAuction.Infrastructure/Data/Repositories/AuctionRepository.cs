@@ -20,7 +20,7 @@ namespace CarAuction.Infrastructure.Data.Repositories
                 .Where(a => a.Region == region && a.State == AuctionState.Active)
                 .ToListAsync();
 
-        public async Task<Guid> AddAsync(Auction auction)
+        public async Task<Guid> CreateAsync(Auction auction)
         {
             _context.Auctions.Add(auction);
 
@@ -68,6 +68,8 @@ namespace CarAuction.Infrastructure.Data.Repositories
                 .OrderBy(b => b.Sequence)
                 .ToListAsync();
 
+            auction.ClearBids();
+            
             foreach (var bid in bids)
             {
                 auction.AddBid(bid);

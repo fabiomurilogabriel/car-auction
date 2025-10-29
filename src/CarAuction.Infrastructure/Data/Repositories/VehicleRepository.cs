@@ -17,7 +17,7 @@ namespace CarAuction.Infrastructure.Data.Repositories
                 .Where(v => v.Region == region)
                 .ToListAsync();
 
-        public async Task<Guid> AddAsync(Vehicle vehicle)
+        public async Task<Guid> CreateAsync(Vehicle vehicle)
         {
             _context.Vehicles.Add(vehicle);
 

@@ -142,5 +142,10 @@ namespace CarAuction.Domain.Models.Auctions
         {
             Vehicle = vehicle;
         }
+
+        public void ClearBids()
+        {
+            _bids.Clear();
+        }
     }
 }

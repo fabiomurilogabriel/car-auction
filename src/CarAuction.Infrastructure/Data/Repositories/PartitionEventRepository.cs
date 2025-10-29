@@ -25,7 +25,7 @@ namespace CarAuction.Infrastructure.Data.Repositories
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync();
 
-        public async Task<Guid> AddAsync(PartitionEvent partitionEvent)
+        public async Task<Guid> CreateAsync(PartitionEvent partitionEvent)
         {
             _context.PartitionEvents.Add(partitionEvent);
             await _context.SaveChangesAsync();

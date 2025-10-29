@@ -11,10 +11,10 @@
 -- ============================================
 CREATE TABLE Vehicles (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    Make NVARCHAR(100) NOT NULL,
+    Brand NVARCHAR(100) NOT NULL,
     Model NVARCHAR(100) NOT NULL,
     Year INT NOT NULL,
-    Type NVARCHAR(20) NOT NULL,
+    VehicleType NVARCHAR(20) NOT NULL,
     Region NVARCHAR(20) NOT NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     UpdatedAt DATETIME2 NULL DEFAULT GETUTCDATE(),
@@ -27,8 +27,8 @@ CREATE TABLE Vehicles (
     CabType NVARCHAR(50) NULL,
 
     INDEX IX_Vehicles_Region (Region),
-    INDEX IX_Vehicles_Type (Type),
-    INDEX IX_Vehicles_Region_Type (Region, Type)
+    INDEX IX_Vehicles_VehicleType (VehicleType),
+    INDEX IX_Vehicles_Region_VehicleType (Region, VehicleType)
 );
 
 -- ============================================
@@ -66,7 +66,7 @@ CREATE TABLE Bids (
     AuctionId UNIQUEIDENTIFIER NOT NULL,
     BidderId UNIQUEIDENTIFIER NOT NULL,
     Amount DECIMAL(18,2) NOT NULL,
-    Timestamp DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     Sequence BIGINT NOT NULL,
     OriginRegion NVARCHAR(20) NOT NULL,
     IsAccepted BIT NOT NULL DEFAULT 0,
@@ -77,7 +77,7 @@ CREATE TABLE Bids (
         REFERENCES Auctions(Id) ON DELETE CASCADE,
     
     INDEX IX_Bids_AuctionId_Sequence (AuctionId, Sequence),
-    INDEX IX_Bids_AuctionId_Timestamp (AuctionId, Timestamp),
+    INDEX IX_Bids_AuctionId_CreatedAt (AuctionId, CreatedAt),
     INDEX IX_Bids_Partition (AuctionId, IsDuringPartition),
     INDEX IX_Bids_BidderId (BidderId)
 );
@@ -99,16 +99,15 @@ CREATE TABLE BidSequences (
 -- ============================================
 CREATE TABLE PartitionEvents (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    Region1 NVARCHAR(20) NOT NULL,
-    Region2 NVARCHAR(20) NOT NULL,
+    OriginBidRegion NVARCHAR(20) NOT NULL,
+    AuctionRegion NVARCHAR(20) NOT NULL,
     Status NVARCHAR(20) NOT NULL,
-    StartTime DATETIME2 NOT NULL,
-    EndTime DATETIME2 NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    EndTime DATETIME2 NULL,
     
     INDEX IX_PartitionEvents_Status (Status),
-    INDEX IX_PartitionEvents_StartTime (StartTime),
-    INDEX IX_PartitionEvents_Status_StartTime (Status, StartTime)
+    INDEX IX_PartitionEvents_AuctionRegion (AuctionRegion),
+    INDEX IX_PartitionEvents_Status_AuctionRegion (Status, AuctionRegion)
 );
 
 -- ============================================
@@ -116,8 +115,8 @@ CREATE TABLE PartitionEvents (
 -- ============================================
 
 -- Ensure valid vehicle types
-ALTER TABLE Vehicles ADD CONSTRAINT CHK_Vehicles_Type 
-    CHECK (Type IN ('Sedan', 'SUV', 'Hatchback', 'Truck'));
+ALTER TABLE Vehicles ADD CONSTRAINT CHK_Vehicles_VehicleType 
+    CHECK (VehicleType IN ('Sedan', 'SUV', 'Hatchback', 'Truck'));
 
 -- Ensure valid regions
 ALTER TABLE Vehicles ADD CONSTRAINT CHK_Vehicles_Region 
@@ -156,12 +155,12 @@ ALTER TABLE Auctions ADD CONSTRAINT CHK_Auctions_TimeRange
 -- =====================================================
 
 -- Insert sample vehicles
-INSERT INTO Vehicles (Id, Make, Model, Year, Type, Region, NumberOfDoors, HasSunroof)
+INSERT INTO Vehicles (Id, Brand, Model, Year, VehicleType, Region, NumberOfDoors, HasSunroof)
 VALUES 
     (NEWID(), 'Toyota', 'Camry', 2023, 'Sedan', 'USEast', 4, 1),
     (NEWID(), 'Honda', 'Accord', 2024, 'Sedan', 'EUWest', 4, 0);
 
-INSERT INTO Vehicles (Id, Make, Model, Year, Type, Region, HasThirdRow, HasAllWheelDrive)
+INSERT INTO Vehicles (Id, Brand, Model, Year, VehicleType, Region, HasThirdRow, HasAllWheelDrive)
 VALUES 
     (NEWID(), 'Ford', 'Explorer', 2023, 'SUV', 'USEast', 1, 1),
     (NEWID(), 'Mazda', 'CX-9', 2024, 'SUV', 'EUWest', 0, 1);

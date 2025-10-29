@@ -7,7 +7,7 @@ namespace CarAuction.Domain.Abstractions.Repositories
     {
         Task<Vehicle> GetByIdAsync(Guid id);
         Task<IEnumerable<Vehicle>> GetByRegionAsync(Region region);
-        Task<Guid> AddAsync(Vehicle vehicle);
+        Task<Guid> CreateAsync(Vehicle vehicle);
         Task UpdateAsync(Vehicle vehicle);
         Task DeleteAsync(Guid id);
         Task<IEnumerable<Vehicle>> GetAllAsync();

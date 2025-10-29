@@ -1,0 +1,52 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+    
+    - name: Run Unit Tests
+      run: dotnet test tests/CarAuction.UnitTests --no-build --configuration Release --logger trx --collect:"XPlat Code Coverage"
+    
+    - name: Run Integration Tests
+      run: dotnet test tests/CarAuction.IntegrationTests --no-build --configuration Release --logger trx --collect:"XPlat Code Coverage"
+    
+    - name: Run Challenge Scenario Test
+      run: dotnet test --no-build --configuration Release --filter "ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequirements" --logger trx
+    
+    - name: Generate Coverage Report
+      run: |
+        dotnet tool install -g dotnet-reportgenerator-globaltool
+        reportgenerator -reports:"tests/**/coverage.cobertura.xml" -targetdir:"coverage-report" -reporttypes:Html
+    
+    - name: Upload Coverage Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage-report/
+    
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: "**/*.trx"

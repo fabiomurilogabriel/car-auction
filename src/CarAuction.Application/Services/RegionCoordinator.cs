@@ -22,12 +22,9 @@ namespace CarAuction.Application.Services
         {
             try
             {
-                if (_partitionSimulator.IsPartitioned)
-                {
-                    return false;
-                }
-
-                return await Task.FromResult(true);
+                // Verificar se existe partição ativa para esta região específica
+                var partition = await _partitionRepository.GetCurrentPartitionByAuctionRegionAsync(region);
+                return partition == null || partition.Status == PartitionStatus.Healthy;
             }
             catch (Exception ex)
             {
@@ -62,21 +59,12 @@ namespace CarAuction.Application.Services
             {
                 PartitionStatus currentStatus;
 
-                if (_partitionSimulator.IsPartitioned)
-                {
-                    currentStatus = PartitionStatus.Partitioned;
-                }
-                else
-                {
-                    var currentPartition = await _partitionRepository.GetCurrentPartitionAsync();
-                    currentStatus = currentPartition?.Status ?? PartitionStatus.Healthy;
-                }
+                // Verificar se há alguma partição ativa no sistema
+                var currentPartition = await _partitionRepository.GetCurrentPartitionAsync();
+                currentStatus = currentPartition?.Status ?? PartitionStatus.Healthy;
 
                 if (currentStatus != _lastStatus)
-                {
-                    // Obtém as regiões envolvidas da partição atual, ou define padrões
-                    var currentPartition = await _partitionRepository.GetCurrentPartitionAsync();
-
+                {                    
                     Region originRegion = currentPartition.OriginBidRegion;
                     Region auctionRegion = currentPartition.AuctionRegion;
 
@@ -130,7 +118,7 @@ namespace CarAuction.Application.Services
                     var partitionEvent = new PartitionEvent(originBidRegion, auctionRegion);
                     partitionEvent.StartPartition();
 
-                    await _partitionRepository.AddAsync(partitionEvent);
+                    await _partitionRepository.CreateAsync(partitionEvent);
 
                     var args = new PartitionEventArgs
                     {

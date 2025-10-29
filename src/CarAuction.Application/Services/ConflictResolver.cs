@@ -6,31 +6,36 @@ namespace CarAuction.Application.Services
 {
     public class ConflictResolver : IConflictResolver
     {
-        public Task ResolveConflictingBidsAsync(List<Bid> allBids, Region region)
+        public Task<IEnumerable<Bid>> ResolveConflictingBidsAsync(List<Bid> allBids, Region region)
         {
             try
             {
                 if (!allBids.Any())
                 {
-                    return Task.CompletedTask;
+                    return Task.FromResult<IEnumerable<Bid>>(Enumerable.Empty<Bid>());
                 }
 
-                var regionBids = allBids.Where(b => b.OriginRegion == region).ToList();
+                var regionBids = allBids
+                    .Where(b => b.OriginRegion == region)
+                    .OrderByDescending(b => b.Amount)
+                    .ThenBy(b => b.CreatedAt)
+                    .ThenBy(b => b.Sequence)
+                    .ToList();
 
                 if (!regionBids.Any())
-                    return Task.CompletedTask;
+                    return Task.FromResult<IEnumerable<Bid>>(Enumerable.Empty<Bid>());
 
-                // o nao uso de metodos LINQ aqui é intencional para evitar criação de listas temporárias
-                // criando novas referencias dos objetos Bid na memória
-                // ordena os mesmos objetos por data e sequência (diretamente na lista)
-                regionBids.Sort((a, b) =>
-                {
-                    var result = a.CreatedAt.CompareTo(b.CreatedAt);
+                //// o nao uso de metodos LINQ aqui é intencional para evitar criação de listas temporárias
+                //// criando novas referencias dos objetos Bid na memória
+                //// ordena os mesmos objetos por data e sequência (diretamente na lista)
+                //regionBids.Sort((a, b) =>
+                //{
+                //    var result = a.CreatedAt.CompareTo(b.CreatedAt);
 
-                    return result != 0
-                        ? result
-                        : a.Sequence.CompareTo(b.Sequence);
-                });
+                //    return result != 0
+                //        ? result
+                //        : a.Sequence.CompareTo(b.Sequence);
+                //});
 
                 // marca o primeiro como aceito item da lista como aceito
                 regionBids[0].Accept();
@@ -39,7 +44,7 @@ namespace CarAuction.Application.Services
                 for (int i = 1; i < regionBids.Count; i++)
                     regionBids[i].Reject($"Lost in conflict resolution by region: {regionBids[i].OriginRegion}");
 
-                return Task.CompletedTask;
+                return Task.FromResult<IEnumerable<Bid>>(regionBids);
             }
             catch (Exception ex)
             {

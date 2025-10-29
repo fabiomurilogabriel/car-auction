@@ -21,7 +21,7 @@ namespace CarAuction.Application.Services
                     throw new ArgumentNullException(nameof(vehicle));
                 }
 
-                return await _repository.AddAsync(vehicle);
+                return await _repository.CreateAsync(vehicle);
             }
             catch (Exception ex)
             {

@@ -7,7 +7,7 @@ namespace CarAuction.Domain.Abstractions.Repositories
     {
         Task<Auction> GetByIdAsync(Guid id);
         Task<IEnumerable<Auction>> GetActiveAuctionsByRegionAsync(Region region);
-        Task<Guid> AddAsync(Auction auction);
+        Task<Guid> CreateAsync(Auction auction);
         Task<bool> UpdateAsync(Auction auction);
         Task<Auction> GetWithBidsAsync(Guid id);
         Task<IEnumerable<Auction>> GetAuctionsThatNeedsReconciliationByRegionAsync(Region region);

@@ -9,5 +9,6 @@ namespace CarAuction.Domain.Abstractions
         Task<Region> GetCurrentRegionAsync();
         Task HealPartitionAsync();
         bool IsPartitioned { get; }
+        Task SetCurrentRegionAsync(Region region);
     }
 }

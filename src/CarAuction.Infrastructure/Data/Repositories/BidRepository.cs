@@ -42,7 +42,7 @@ namespace CarAuction.Infrastructure.Data.Repositories
             return bidSequence.CurrentSequence;
         }
 
-        public async Task<Guid> AddAsync(Bid bid)
+        public async Task<Guid> CreateAsync(Bid bid)
         {
             _context.Bids.Add(bid);
             await _context.SaveChangesAsync();
@@ -54,5 +54,34 @@ namespace CarAuction.Infrastructure.Data.Repositories
                 .Where(b => b.AuctionId == auctionId && b.IsDuringPartition && b.CreatedAt < auctionEndDate)
                 .OrderBy(b => b.CreatedAt)
                 .ToListAsync();
+
+        public async Task UpdateAsync(Bid bid)
+        {
+            try
+            {
+                _context.Bids.Update(bid);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to update bid {bid.Id}: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task UpdateRangeAsync(IEnumerable<Bid> bids)
+        {
+            try
+            {
+                _context.Bids.UpdateRange(bids);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to update bids: {ex.Message}");
+                throw;
+            }
+        }
+
     }
 }
