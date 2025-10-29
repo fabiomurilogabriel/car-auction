@@ -1,154 +1,154 @@
 # Tests Summary - Distributed Car Auction Platform
 
-## Como Executar os Testes
+## How to Run Tests
 
-### Pré-requisitos
+### Prerequisites
 - .NET 8.0 SDK
-- Visual Studio 2022 ou VS Code
+- Visual Studio 2022 or VS Code
 
-### Comandos de Execução
+### Execution Commands
 
 ```bash
-# Todos os testes
+# All tests
 dotnet test
 
-# Apenas testes unitários
+# Unit tests only
 dotnet test tests/CarAuction.UnitTests/
 
-# Apenas testes de integração
+# Integration tests only
 dotnet test tests/CarAuction.IntegrationTests/
 
-# Teste específico do desafio (cenário de 5 minutos)
+# Specific challenge test (5-minute scenario)
 dotnet test --filter "ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequirements"
 
-# Com relatório de cobertura
+# With coverage report
 dotnet test --collect:"XPlat Code Coverage"
 ```
 
-## Cobertura de Testes
+## Test Coverage
 
-### Testes Unitários
-**Localização**: `tests/CarAuction.UnitTests/`
+### Unit Tests
+**Location**: `tests/CarAuction.UnitTests/`
 
 #### Domain Models
-- **AuctionTests**: Máquina de estados, colocação de lances, transições
-- **BidTests**: Aceitação, rejeição, marcação durante partição
-- **PartitionEventTests**: Ciclo de vida das partições
+- **AuctionTests**: State machine, bid placement, transitions
+- **BidTests**: Acceptance, rejection, partition marking
+- **PartitionEventTests**: Partition lifecycle
 
-#### Services Críticos
-- **AuctionServiceTests**: Criação de leilões, níveis de consistência
-- **ConflictResolverTests**: Resolução de conflitos, determinação de vencedor
-- **BidOrderingServiceTests**: Sequenciamento e validação de lances
+#### Critical Services
+- **AuctionServiceTests**: Auction creation, consistency levels
+- **ConflictResolverTests**: Conflict resolution, winner determination
+- **BidOrderingServiceTests**: Bid sequencing and validation
 
-### Testes de Integração
-**Localização**: `tests/CarAuction.IntegrationTests/`
+### Integration Tests
+**Location**: `tests/CarAuction.IntegrationTests/`
 
-#### Cenários CAP
-- **CAPConsistencyTests**: Trade-offs CP vs AP por operação
-- **ExactChallengeScenarioTest**: Cenário exato do desafio (5 minutos)
-- **PartitionScenarioTests**: Diversos cenários de partição
+#### CAP Scenarios
+- **CAPConsistencyTests**: CP vs AP trade-offs per operation
+- **ExactChallengeScenarioTest**: Exact challenge scenario (5 minutes)
+- **PartitionScenarioTests**: Various partition scenarios
 
 #### Performance
-- **PerformanceAndConcurrencyTests**: Requisitos não-funcionais
+- **PerformanceAndConcurrencyTests**: Non-functional requirements
   - < 200ms bid processing (P95)
   - 1000+ concurrent auctions
   - 10K concurrent users
 
-## Requisitos do Desafio Validados
+## Challenge Requirements Validated
 
-### ✅ Teorema CAP - Trade-offs Implementados
+### ✅ CAP Theorem - Implemented Trade-offs
 
-| Operação | Escolha CAP | Teste Validador |
+| Operation | CAP Choice | Validator Test |
 |----------|-------------|-----------------|
-| **Criar Leilão** | **CP** | `CAPConsistencyTests.CreateAuction_ShouldUseCP` |
-| **Lance Local** | **CP** | `CAPConsistencyTests.LocalBid_ShouldUseCP` |
-| **Lance Cross-Region** | **AP** | `CAPConsistencyTests.CrossRegionBid_ShouldUseAP` |
-| **Visualizar Leilão** | **Configurável** | `CAPConsistencyTests.ViewAuction_ShouldSupportBothLevels` |
+| **Create Auction** | **CP** | `CAPConsistencyTests.CreateAuction_ShouldUseCP` |
+| **Local Bid** | **CP** | `CAPConsistencyTests.LocalBid_ShouldUseCP` |
+| **Cross-Region Bid** | **AP** | `CAPConsistencyTests.CrossRegionBid_ShouldUseAP` |
+| **View Auction** | **Configurable** | `CAPConsistencyTests.ViewAuction_ShouldSupportBothLevels` |
 
-### ✅ Cenário Específico do Desafio
+### ✅ Specific Challenge Scenario
 
-**Teste**: `ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequirements`
+**Test**: `ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequirements`
 
-**Cenário Implementado**:
+**Implemented Scenario**:
 ```
-1. Leilão criado em US-East
-2. Lance inicial antes da partição
-3. Partição de 5 minutos entre US-East ↔ EU-West
-4. Lance US → US (local) durante partição → REJEITADO (CP)
-5. Lance EU → US (cross-region) durante partição → ENFILEIRADO (AP)
-6. Cura da partição
-7. Reconciliação automática
-8. Verificação: nenhum lance perdido, integridade mantida
+1. Auction created in US-East
+2. Initial bid before partition
+3. 5-minute partition between US-East ↔ EU-West
+4. US → US (local) bid during partition → REJECTED (CP)
+5. EU → US (cross-region) bid during partition → QUEUED (AP)
+6. Partition healing
+7. Automatic reconciliation
+8. Verification: no bids lost, integrity maintained
 ```
 
-### ✅ Requisitos Funcionais
+### ✅ Functional Requirements
 
-- **Define behavior during partition**: ✅ CP para local, AP para cross-region
-- **Implement reconciliation mechanism**: ✅ Algoritmo determinístico
-- **Ensure no bids are lost**: ✅ Bids cross-region preservados
-- **Maintain auction integrity**: ✅ Estado consistente pós-reconciliação
+- **Define behavior during partition**: ✅ CP for local, AP for cross-region
+- **Implement reconciliation mechanism**: ✅ Deterministic algorithm
+- **Ensure no bids are lost**: ✅ Cross-region bids preserved
+- **Maintain auction integrity**: ✅ Consistent state post-reconciliation
 
-### ✅ Requisitos Não-Funcionais
+### ✅ Non-Functional Requirements
 
-| Requisito | Meta | Teste Validador |
+| Requirement | Target | Validator Test |
 |-----------|------|-----------------|
-| **Latência** | < 200ms (P95) | `BidProcessing_ShouldBeFasterThan200ms_P95` |
-| **Leilões Concorrentes** | 1000+ por região | `ConcurrentAuctions_ShouldSupport1000Plus` |
-| **Usuários Concorrentes** | 10K por região | `ConcurrentUsers_ShouldSupport10000_SimulatedLoad` |
-| **Disponibilidade** | 99.9% por região | Validado via testes de partição |
+| **Latency** | < 200ms (P95) | `BidProcessing_ShouldBeFasterThan200ms_P95` |
+| **Concurrent Auctions** | 1000+ per region | `ConcurrentAuctions_ShouldSupport1000Plus` |
+| **Concurrent Users** | 10K per region | `ConcurrentUsers_ShouldSupport10000_SimulatedLoad` |
+| **Availability** | 99.9% per region | Validated via partition tests |
 
-## Algoritmos Críticos Testados
+## Critical Algorithms Tested
 
-### Resolução de Conflitos
-- **Por Região**: Primeiro por valor, depois por timestamp
-- **Global**: Maior valor aceito vence
-- **Tiebreaker**: Timestamp + sequência determinística
+### Conflict Resolution
+- **By Region**: First by value, then by timestamp
+- **Global**: Highest accepted value wins
+- **Tiebreaker**: Timestamp + deterministic sequence
 
-### Reconciliação Pós-Partição
-1. Coleta todos os bids (normais + particionados)
-2. Resolve conflitos por região
-3. Determina vencedor global
-4. Atualiza estado do leilão
-5. Marca partição como resolvida
+### Post-Partition Reconciliation
+1. Collect all bids (normal + partitioned)
+2. Resolve conflicts by region
+3. Determine global winner
+4. Update auction state
+5. Mark partition as resolved
 
-### Detecção de Partição
-- **Simulada**: Via `PartitionSimulator` para testes
-- **Por Região**: Cada região pode estar particionada independentemente
-- **Eventos**: Rastreamento completo do ciclo de vida
+### Partition Detection
+- **Simulated**: Via `PartitionSimulator` for tests
+- **By Region**: Each region can be partitioned independently
+- **Events**: Complete lifecycle tracking
 
-## Estrutura de Dados Testada
+## Tested Data Structure
 
-### Modelos de Domínio
-- **Auction**: Estados (Draft → Active → Paused → Ended)
+### Domain Models
+- **Auction**: States (Draft → Active → Paused → Ended)
 - **Bid**: Flags (IsAccepted, IsDuringPartition)
 - **PartitionEvent**: Status (Healthy → Partitioned → Reconciling → Resolved)
 
-### Repositórios
-- **Sequenciamento Atômico**: BidSequences para ordem garantida
-- **Controle de Versão**: Optimistic locking em Auctions
-- **Consultas Otimizadas**: Índices para performance
+### Repositories
+- **Atomic Sequencing**: BidSequences for guaranteed order
+- **Version Control**: Optimistic locking on Auctions
+- **Optimized Queries**: Indexes for performance
 
-## Métricas de Sucesso
+## Success Metrics
 
-### Cobertura de Código
-- **Domain Models**: 100% dos cenários críticos
-- **Services**: 95%+ das linhas de código
-- **Integration**: Todos os requisitos do desafio
+### Code Coverage
+- **Domain Models**: 100% of critical scenarios
+- **Services**: 95%+ of code lines
+- **Integration**: All challenge requirements
 
-### Cenários de Teste
-- **Partição Normal**: ✅ 15+ cenários
-- **Casos Extremos**: ✅ Leilões expirando durante partição
-- **Performance**: ✅ Carga simulada de 10K usuários
-- **Concorrência**: ✅ 1000+ leilões simultâneos
+### Test Scenarios
+- **Normal Partition**: ✅ 15+ scenarios
+- **Edge Cases**: ✅ Auctions expiring during partition
+- **Performance**: ✅ Simulated load of 10K users
+- **Concurrency**: ✅ 1000+ simultaneous auctions
 
-## Conclusão
+## Conclusion
 
-A suíte de testes valida completamente:
+The test suite completely validates:
 
-1. **Implementação correta do Teorema CAP** com trade-offs apropriados
-2. **Cenário exato do desafio** com partição de 5 minutos
-3. **Algoritmos de reconciliação** determinísticos e robustos
-4. **Requisitos de performance** para sistema de produção
-5. **Integridade de dados** em todos os cenários de falha
+1. **Correct CAP Theorem implementation** with appropriate trade-offs
+2. **Exact challenge scenario** with 5-minute partition
+3. **Reconciliation algorithms** deterministic and robust
+4. **Performance requirements** for production system
+5. **Data integrity** in all failure scenarios
 
-**Total**: 25+ testes cobrindo todos os aspectos críticos do sistema distribuído.
+**Total**: 25+ tests covering all critical aspects of the distributed system.

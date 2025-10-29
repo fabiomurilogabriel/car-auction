@@ -1,6 +1,6 @@
-# Arquitetura Técnica - Sistema de Leilão Distribuído
+# Technical Architecture - Distributed Auction System
 
-## Visão Geral da Arquitetura
+## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -27,7 +27,7 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Diagrama do Banco de Dados
+## Database Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -68,57 +68,57 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Índices Críticos para Performance:
+### Critical Performance Indexes:
 ```sql
--- Consultas por região (mais frequente)
+-- Region queries (most frequent)
 CREATE INDEX IX_Auctions_Region_State ON Auctions(Region, State);
 
--- Ordenação de lances (crítico para performance)
+-- Bid ordering (critical for performance)
 CREATE INDEX IX_Bids_AuctionId_Sequence ON Bids(AuctionId, Sequence);
 
--- Lances durante partição (reconciliação)
+-- Bids during partition (reconciliation)
 CREATE INDEX IX_Bids_Partition ON Bids(AuctionId, IsDuringPartition);
 
--- Leilões ativos por região
+-- Active auctions by region
 CREATE INDEX IX_Auctions_Region_EndTime ON Auctions(Region, EndTime) 
 WHERE State IN ('Active', 'Paused');
 
--- Sequenciamento atômico
+-- Atomic sequencing
 CREATE UNIQUE INDEX IX_BidSequences_AuctionId ON BidSequences(AuctionId);
 ```
 
-## Componentes Principais
+## Main Components
 
 ### 1. Domain Layer (CarAuction.Domain)
 
-#### Entidades Principais:
+#### Main Entities:
 ```csharp
-// Auction - Agregado raiz com máquina de estados
+// Auction - Root aggregate with state machine
 public class Auction
 {
     public AuctionState State { get; private set; }  // Draft → Active → Paused → Ended
-    public long Version { get; private set; }        // Controle de versão otimista
+    public long Version { get; private set; }        // Optimistic version control
     
-    public bool TryPlaceBid(Bid bid) { /* Lógica de negócio */ }
-    public void Pause() { /* Transição de estado */ }
+    public bool TryPlaceBid(Bid bid) { /* Business logic */ }
+    public void Pause() { /* State transition */ }
 }
 
-// Bid - Entidade com ordenação garantida
+// Bid - Entity with guaranteed ordering
 public class Bid
 {
-    public long Sequence { get; private set; }       // Ordem global por leilão
-    public Region OriginRegion { get; private set; } // Rastreamento de origem
-    public bool IsDuringPartition { get; private set; } // Flag de reconciliação
+    public long Sequence { get; private set; }       // Global order per auction
+    public Region OriginRegion { get; private set; } // Origin tracking
+    public bool IsDuringPartition { get; private set; } // Reconciliation flag
 }
 
-// Vehicle - Herança TPH (Table-Per-Hierarchy)
+// Vehicle - TPH (Table-Per-Hierarchy) inheritance
 public abstract class Vehicle
 {
-    public VehicleType Type { get; protected set; }  // Discriminador
+    public VehicleType Type { get; protected set; }  // Discriminator
 }
 ```
 
-#### Abstrações de Serviços:
+#### Service Abstractions:
 ```csharp
 public interface IAuctionService
 {
@@ -136,7 +136,7 @@ public interface IRegionCoordinator
 
 ### 2. Application Layer (CarAuction.Application)
 
-#### AuctionService - Orquestrador Principal:
+#### AuctionService - Main Orchestrator:
 ```csharp
 public async Task<BidResult> PlaceBidAsync(Guid auctionId, BidRequest request)
 {
@@ -144,7 +144,7 @@ public async Task<BidResult> PlaceBidAsync(Guid auctionId, BidRequest request)
     var currentRegion = await GetCurrentRegionAsync();
     var isPartitioned = await _regionCoordinator.GetPartitionStatusAsync() == PartitionStatus.Partitioned;
     
-    // Decisão CAP baseada no contexto
+    // CAP decision based on context
     if (IsLocalBid(auction.Region, currentRegion) && !isPartitioned)
     {
         return await ProcessStrongConsistencyBid(auction, request); // CP
@@ -158,7 +158,7 @@ public async Task<BidResult> PlaceBidAsync(Guid auctionId, BidRequest request)
 }
 ```
 
-#### RegionCoordinator - Gerenciamento de Partições:
+#### RegionCoordinator - Partition Management:
 ```csharp
 public async Task<PartitionStatus> GetPartitionStatusAsync()
 {
@@ -182,7 +182,7 @@ public async Task<PartitionStatus> GetPartitionStatusAsync()
 
 ### 3. Infrastructure Layer (CarAuction.Infrastructure)
 
-#### Repositórios com Entity Framework:
+#### Repositories with Entity Framework:
 ```csharp
 public class AuctionRepository : IAuctionRepository
 {
@@ -196,7 +196,7 @@ public class AuctionRepository : IAuctionRepository
     
     public async Task UpdateAsync(Auction auction)
     {
-        // Controle de versão otimista
+        // Optimistic version control
         var rowsAffected = await _context.Database.ExecuteSqlRawAsync(
             "UPDATE Auctions SET CurrentPrice = {0}, Version = Version + 1 " +
             "WHERE Id = {1} AND Version = {2}",
@@ -208,7 +208,7 @@ public class AuctionRepository : IAuctionRepository
 }
 ```
 
-#### Simulador de Partições:
+#### Partition Simulator:
 ```csharp
 public class PartitionSimulator : IPartitionSimulator
 {
@@ -216,7 +216,7 @@ public class PartitionSimulator : IPartitionSimulator
     {
         IsPartitioned = true;
         
-        // Simula partição por tempo determinado
+        // Simulates partition for determined time
         _ = Task.Delay(duration).ContinueWith(_ => {
             IsPartitioned = false;
         });
@@ -224,28 +224,28 @@ public class PartitionSimulator : IPartitionSimulator
 }
 ```
 
-## Estratégias de Consistência
+## Consistency Strategies
 
-### 1. Consistência Forte (CP) - Lances Locais
+### 1. Strong Consistency (CP) - Local Bids
 
 ```csharp
-// Transação ACID para lances na mesma região
+// ACID transaction for bids in the same region
 await _regionCoordinator.ExecuteInRegionAsync(auction.Region, async () =>
 {
     using var transaction = await _context.Database.BeginTransactionAsync();
     
     try
     {
-        // 1. Obter próxima sequência (atômico)
+        // 1. Get next sequence (atomic)
         var sequence = await _bidOrderingService.GetNextBidSequenceAsync(auctionId);
         
-        // 2. Validar lance
+        // 2. Validate bid
         var acceptance = await _bidOrderingService.ValidateBidOrderAsync(auctionId, bid);
         
-        // 3. Atualizar leilão (com controle de versão)
+        // 3. Update auction (with version control)
         var success = auction.TryPlaceBid(bid);
         
-        // 4. Persistir mudanças
+        // 4. Persist changes
         await _bidRepository.AddAsync(bid);
         await _auctionRepository.UpdateAsync(auction);
         
@@ -260,18 +260,18 @@ await _regionCoordinator.ExecuteInRegionAsync(auction.Region, async () =>
 });
 ```
 
-### 2. Consistência Eventual (AP) - Lances Cross-Region
+### 2. Eventual Consistency (AP) - Cross-Region Bids
 
 ```csharp
-// Durante partição: enfileirar para reconciliação posterior
+// During partition: queue for later reconciliation
 public async Task<BidResult> HandlePartitionedBidAsync(Auction auction, BidRequest request)
 {
     var sequence = await _bidOrderingService.GetNextBidSequenceAsync(auction.Id);
     var bid = new Bid(auction.Id, request.BidderId, request.Amount, currentRegion, sequence);
     
-    // Marcar para reconciliação
+    // Mark for reconciliation
     bid.MarkAsDuringPartition();
-    auction.Pause(); // Pausar leilão até reconciliação
+    auction.Pause(); // Pause auction until reconciliation
     
     await _bidRepository.AddAsync(bid);
     
@@ -279,74 +279,74 @@ public async Task<BidResult> HandlePartitionedBidAsync(Auction auction, BidReque
 }
 ```
 
-## Algoritmo de Reconciliação
+## Reconciliation Algorithm
 
-### Processo Pós-Partição:
+### Post-Partition Process:
 
 ```csharp
 public async Task<ReconciliationResult> ReconcileAuctionAsync(Guid auctionId)
 {
-    // 1. Carregar todos os lances (normais + particionados)
+    // 1. Load all bids (normal + partitioned)
     var auction = await _auctionRepository.GetWithBidsAsync(auctionId);
     var partitionBids = await _bidRepository.GetBidsMadeDuringPartitionAsync(auctionId);
     
-    // 2. Ordenar cronologicamente
+    // 2. Order chronologically
     var allBids = auction.Bids
         .Concat(partitionBids)
         .OrderBy(b => b.CreatedAt)
         .ThenBy(b => b.Sequence)
         .ToList();
     
-    // 3. Resolver conflitos por região
+    // 3. Resolve conflicts by region
     foreach (var region in Enum.GetValues<Region>())
     {
         await _conflictResolver.ResolveConflictingBidsAsync(allBids, region);
     }
     
-    // 4. Determinar vencedor final
+    // 4. Determine final winner
     var winningBid = await _conflictResolver.DetermineFinalWinnerAsync(allBids);
     
-    // 5. Atualizar estado final
+    // 5. Update final state
     if (winningBid != null)
     {
         auction.UpdateWinningBid(winningBid.Amount, winningBid.BidderId);
     }
     
-    auction.Resume(); // ou End() se prazo expirou
+    auction.Resume(); // or End() if deadline expired
     await _auctionRepository.UpdateAsync(auction);
     
     return new ReconciliationResult { Success = true, WinnerId = winningBid?.BidderId };
 }
 ```
 
-### Regras de Resolução de Conflitos:
+### Conflict Resolution Rules:
 
-1. **Prioridade por Valor**: Lance maior vence
-2. **Desempate por Tempo**: Timestamp mais antigo vence
-3. **Desempate Final por Sequência**: Sequência menor vence
-4. **Validação de Prazo**: Apenas lances dentro do prazo do leilão
+1. **Priority by Value**: Higher bid wins
+2. **Time Tiebreaker**: Earlier timestamp wins
+3. **Final Sequence Tiebreaker**: Lower sequence wins
+4. **Deadline Validation**: Only bids within auction deadline
 
-## Schema de Banco Otimizado
+## Optimized Database Schema
 
-### Índices Estratégicos:
+### Strategic Indexes:
 ```sql
--- Consultas por região (mais frequente)
+-- Region queries (most frequent)
 CREATE INDEX IX_Auctions_Region_State ON Auctions(Region, State);
 
--- Ordenação de lances (crítico para performance)
+-- Bid ordering (critical for performance)
 CREATE INDEX IX_Bids_AuctionId_Sequence ON Bids(AuctionId, Sequence);
 
--- Lances durante partição (reconciliação)
+-- Bids during partition (reconciliation)
 CREATE INDEX IX_Bids_Partition ON Bids(AuctionId, IsDuringPartition);
 
--- Leilões ativos por região
+-- Active auctions by region
 CREATE INDEX IX_Auctions_Region_EndTime ON Auctions(Region, EndTime) 
 WHERE State IN ('Active', 'Paused');
 ```
 
-### Controle de Versão Otimista:
+### Optimistic Version Control:
 ```sql
--- Atualização com controle de concorrência
+-- Update with concurrency control
 UPDATE Auctions 
 SET CurrentPrice = @newPrice, 
     WinningBidderId = @bidderId,
@@ -355,14 +355,14 @@ SET CurrentPrice = @newPrice,
 WHERE Id = @auctionId 
   AND Version = @expectedVersion;
 
--- Se @@ROWCOUNT = 0, houve conflito de concorrência
+-- If @@ROWCOUNT = 0, there was a concurrency conflict
 ```
 
-## Tratamento de Eventos
+## Event Handling
 
 ### Event-Driven Architecture:
 ```csharp
-// Eventos de partição
+// Partition events
 public class RegionCoordinator
 {
     public event EventHandler<PartitionEventArgs> PartitionDetected;
@@ -374,10 +374,10 @@ public class RegionCoordinator
     }
 }
 
-// Handlers no AuctionService
+// Handlers in AuctionService
 private async void OnPartitionDetectedHandler(object sender, PartitionEventArgs e)
 {
-    // Pausar leilões na região afetada
+    // Pause auctions in affected region
     var activeAuctions = await _auctionRepository.GetActiveAuctionsByRegionAsync(e.Region);
     
     foreach (var auction in activeAuctions)
@@ -388,95 +388,95 @@ private async void OnPartitionDetectedHandler(object sender, PartitionEventArgs 
 }
 ```
 
-## Métricas e Monitoramento
+## Metrics and Monitoring
 
-### KPIs Implementados:
-- **Latência de Lance**: < 200ms (p95)
-- **Throughput**: 1000+ leilões concorrentes
-- **Disponibilidade**: 99.9% por região
-- **Integridade**: 0% perda de lances
+### Implemented KPIs:
+- **Bid Latency**: < 200ms (p95)
+- **Throughput**: 1000+ concurrent auctions
+- **Availability**: 99.9% per region
+- **Integrity**: 0% bid loss
 
-### Logging Estruturado:
+### Structured Logging:
 ```csharp
 Console.WriteLine($"Partition detected between {region1} and {region2} at {timestamp}");
 Console.WriteLine($"Bid {bidId} queued for reconciliation - Amount: {amount}");
 Console.WriteLine($"Reconciliation completed for auction {auctionId} - Winner: {winnerId}");
 ```
 
-## Requisitos Funcionais Atendidos
+## Functional Requirements Met
 
-### ✅ Cenário Principal do Desafio
-**Partição de Rede de 5 Minutos entre US-East e EU-West:**
+### ✅ Main Challenge Scenario
+**5-Minute Network Partition between US-East and EU-West:**
 
-1. **Durante a Partição:**
-   - Usuário EU tenta lance em leilão US → Enfileirado para reconciliação
-   - Usuário US faz lance no mesmo leilão US → Processado normalmente
-   - Leilão programado para terminar durante partição → Pausado até reconciliação
+1. **During Partition:**
+   - EU user tries bid on US auction → Queued for reconciliation
+   - US user bids on same US auction → Processed normally
+   - Auction scheduled to end during partition → Paused until reconciliation
 
-2. **Pós-Partição (Reconciliação):**
-   - Nenhum lance é perdido
-   - Vencedor determinado deterministicamente
-   - Integridade do leilão mantida
-   - Auditoria completa preservada
+2. **Post-Partition (Reconciliation):**
+   - No bids are lost
+   - Winner determined deterministically
+   - Auction integrity maintained
+   - Complete audit trail preserved
 
-### ✅ Requisitos de Performance
+### ✅ Performance Requirements
 
-| Métrica | Requisito | Status |
+| Metric | Requirement | Status |
 |---------|-----------|--------|
-| **Latência de Lance** | < 200ms (p95) | ✅ Atendido |
-| **Leilões Concorrentes** | 1000+ por região | ✅ Atendido |
-| **Usuários Concorrentes** | 10,000 por região | ✅ Simulado |
-| **Disponibilidade** | 99.9% por região | ✅ Atendido |
+| **Bid Latency** | < 200ms (p95) | ✅ Met |
+| **Concurrent Auctions** | 1000+ per region | ✅ Met |
+| **Concurrent Users** | 10,000 per region | ✅ Simulated |
+| **Availability** | 99.9% per region | ✅ Met |
 
-### ✅ Trade-offs do Teorema CAP
+### ✅ CAP Theorem Trade-offs
 
-| Operação | Escolha CAP | Justificativa |
+| Operation | CAP Choice | Justification |
 |----------|-------------|---------------|
-| **Criar Leilão** | **CP** | Consistência forte para evitar duplicatas |
-| **Lance Local** | **CP** | Consistência forte dentro da região |
-| **Lance Cross-Region** | **AP** | Disponibilidade durante partições |
-| **Visualizar Leilão** | **Configurável** | Strong/Eventual baseado no contexto |
-| **Finalizar Leilão** | **CP** | Integridade do resultado final |
+| **Create Auction** | **CP** | Strong consistency to avoid duplicates |
+| **Local Bid** | **CP** | Strong consistency within region |
+| **Cross-Region Bid** | **AP** | Availability during partitions |
+| **View Auction** | **Configurable** | Strong/Eventual based on context |
+| **End Auction** | **CP** | Final result integrity |
 
-## Testes Implementados
+## Implemented Tests
 
-### ✅ Cobertura de Testes
+### ✅ Test Coverage
 
-**Testes Unitários:**
-- Máquina de estados do Auction
-- Lógica de ordenação de lances
-- Algoritmos de resolução de conflitos
-- Repositórios com mocks
+**Unit Tests:**
+- Auction state machine
+- Bid ordering logic
+- Conflict resolution algorithms
+- Repositories with mocks
 
-**Testes de Integração:**
-- Cenários de partição normais
-- Lances concorrentes com race conditions
-- Reconciliação pós-partição
-- **Simulação completa de partição** (cenário principal)
-- Testes de performance e concorrência
+**Integration Tests:**
+- Normal partition scenarios
+- Concurrent bids with race conditions
+- Post-partition reconciliation
+- **Complete partition simulation** (main scenario)
+- Performance and concurrency tests
 
-**Teste Principal - ExactChallengeScenario_5MinutePartition:**
+**Main Test - ExactChallengeScenario_5MinutePartition:**
 ```bash
 dotnet test --filter "ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequirements"
 ```
 
-## Algoritmo de Reconciliação Detalhado
+## Detailed Reconciliation Algorithm
 
-### Processo de Resolução de Conflitos:
+### Conflict Resolution Process:
 
 ```csharp
-// 1. Coleta de Dados
+// 1. Data Collection
 var normalBids = auction.Bids.Where(b => !b.IsDuringPartition);
 var partitionBids = await _bidRepository.GetBidsMadeDuringPartitionAsync(auctionId);
 
-// 2. Ordenação Determinística
+// 2. Deterministic Ordering
 var allBids = normalBids.Concat(partitionBids)
-    .OrderBy(b => b.CreatedAt)      // Primeiro: timestamp
-    .ThenBy(b => b.Sequence)        // Segundo: sequência
-    .ThenBy(b => b.Id)              // Terceiro: ID (desempate final)
+    .OrderBy(b => b.CreatedAt)      // First: timestamp
+    .ThenBy(b => b.Sequence)        // Second: sequence
+    .ThenBy(b => b.Id)              // Third: ID (final tiebreaker)
     .ToList();
 
-// 3. Aplicação de Regras de Negócio
+// 3. Business Rules Application
 foreach (var bid in allBids)
 {
     if (bid.Amount > auction.CurrentPrice && 
@@ -491,7 +491,7 @@ foreach (var bid in allBids)
     }
 }
 
-// 4. Determinação do Vencedor
+// 4. Winner Determination
 var winningBid = allBids
     .Where(b => b.IsAccepted)
     .OrderByDescending(b => b.Amount)
@@ -499,43 +499,43 @@ var winningBid = allBids
     .FirstOrDefault();
 ```
 
-### Garantias de Integridade:
+### Integrity Guarantees:
 
-1. **Atomicidade**: Todas as operações em transação ACID
-2. **Consistência**: Regras de negócio aplicadas uniformemente
-3. **Isolamento**: Controle de versão otimista previne race conditions
-4. **Durabilidade**: Persistência garantida antes do commit
+1. **Atomicity**: All operations in ACID transaction
+2. **Consistency**: Business rules applied uniformly
+3. **Isolation**: Optimistic version control prevents race conditions
+4. **Durability**: Persistence guaranteed before commit
 
-## Limitações e Considerações
+## Limitations and Considerations
 
-### Limitações Conhecidas:
-1. **Simulação**: Não há comunicação de rede real
-2. **Persistência**: InMemory database para testes
-3. **Escala**: Single-node por região
-4. **Segurança**: Sem autenticação/autorização
+### Known Limitations:
+1. **Simulation**: No real network communication
+2. **Persistence**: InMemory database for tests
+3. **Scale**: Single-node per region
+4. **Security**: No authentication/authorization
 
-### Trade-offs Aceitos:
-- **Complexidade vs Consistência**: Escolhemos consistência eventual para disponibilidade
-- **Performance vs Auditoria**: Mantemos histórico completo para debugging
-- **Simplicidade vs Flexibilidade**: Design extensível para futuras funcionalidades
+### Accepted Trade-offs:
+- **Complexity vs Consistency**: We chose eventual consistency for availability
+- **Performance vs Auditing**: We maintain complete history for debugging
+- **Simplicity vs Flexibility**: Extensible design for future features
 
-### Considerações de Produção:
-1. **Load Balancing**: Múltiplas instâncias por região
-2. **Cache Distribuído**: Redis para performance
-3. **Message Queue**: RabbitMQ/Kafka para eventos
-4. **Monitoring**: Prometheus/Grafana para métricas
-5. **Database**: SQL Server com Always On para HA
+### Production Considerations:
+1. **Load Balancing**: Multiple instances per region
+2. **Distributed Cache**: Redis for performance
+3. **Message Queue**: RabbitMQ/Kafka for events
+4. **Monitoring**: Prometheus/Grafana for metrics
+5. **Database**: SQL Server with Always On for HA
 
-## Conclusão
+## Conclusion
 
-Esta implementação demonstra uma compreensão sólida de sistemas distribuídos, com foco especial em:
+This implementation demonstrates a solid understanding of distributed systems, with special focus on:
 
-1. **Teorema CAP**: Trade-offs conscientes baseados no contexto
-2. **Tratamento de Partições**: Estratégia robusta de detecção e reconciliação
-3. **Consistência de Dados**: Múltiplos níveis baseados na necessidade
-4. **Design de Banco**: Schema otimizado para cenários distribuídos
-5. **Testabilidade**: Cobertura abrangente incluindo cenários complexos
+1. **CAP Theorem**: Conscious trade-offs based on context
+2. **Partition Handling**: Robust strategy for detection and reconciliation
+3. **Data Consistency**: Multiple levels based on necessity
+4. **Database Design**: Schema optimized for distributed scenarios
+5. **Testability**: Comprehensive coverage including complex scenarios
 
-A solução prioriza **integridade dos dados** e **experiência do usuário** mesmo durante falhas de rede, mantendo um equilíbrio entre disponibilidade e consistência apropriado para um sistema de leilões crítico.
+The solution prioritizes **data integrity** and **user experience** even during network failures, maintaining an appropriate balance between availability and consistency for a critical auction system.
 
-**Resultado Final**: Todos os requisitos do desafio foram atendidos com uma arquitetura robusta, testável e bem documentada.
+**Final Result**: All challenge requirements were met with a robust, testable, and well-documented architecture.
