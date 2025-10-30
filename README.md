@@ -33,8 +33,7 @@ CarAuction/
 │   └── README.md                    # Database design documentation
 ├── Solution Items/
 │   ├── ARCHITECTURE.md              # Technical architecture documentation
-│   ├── TESTS_SUMMARY.md             # Comprehensive test coverage summary
-│   └── INTEGRATION_TESTS_SUMMARY.md # Integration tests detailed summary
+│   └── TESTS_SUMMARY.md             # Comprehensive test coverage summary
 ├── coverage-report/                 # Test coverage reports
 ├── README.md                        # This file - project overview
 └── CarAuction.sln                   # Solution file
@@ -83,6 +82,16 @@ When an auction is supposed to end during a network partition, we pause it inste
 **Viewing Auction Status (Configurable)**
 - *For placing bids:* Strong consistency - you need current data to make bidding decisions
 - *For browsing:* Eventual consistency - it's fine if the price is a few seconds behind when you're just looking around
+
+## CAP Decisions Summary
+
+| Operation | CAP Choice | Justification |
+|----------|-------------|---------------|
+| **Create Auction** | **CP** | Strong consistency to avoid duplicates |
+| **Local Bid** | **CP** | Strong consistency within region |
+| **Cross-Region Bid** | **AP** | Availability during partitions |
+| **View Auction** | **Configurable** | Strong/Eventual based on context |
+| **End Auction** | **CP** | Final result integrity |
 
 ## Network Partition Handling
 

@@ -2,7 +2,49 @@
 
 The database is designed to handle auctions across two regions while dealing with network issues gracefully.
 
-## Key Decisions
+## Database Schema
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌──────────────┐
+│    VEHICLES     │    │    AUCTIONS     │    │     BIDS     │
+├─────────────────┤    ├─────────────────┤    ├──────────────┤
+│ Id (PK)         │◄───┤ VehicleId (FK)  │◄───┤ AuctionId(FK)│
+│ Brand           │    │ Id (PK)         │    │ Id (PK)      │
+│ Model           │    │ Region          │    │ BidderId     │
+│ Year            │    │ State           │    │ Amount       │
+│ VehicleType     │    │ StartingPrice   │    │ Sequence     │
+│ Region          │    │ CurrentPrice    │    │ OriginRegion │
+│ CreatedAt       │    │ ReservePrice    │    │ CreatedAt    │
+│ UpdatedAt       │    │ StartTime       │    │ IsAccepted   │
+│                 │    │ EndTime         │    │ IsDuringPart │
+│ -- TPH Fields --│    │ WinningBidderId │    │ RejectionRsn │
+│ NumberOfDoors   │    │ Version         │    └──────────────┘
+│ HasSunroof      │    │ CreatedAt       │
+│ HasThirdRow     │    │ UpdatedAt       │
+│ CargoCapacity   │    └─────────────────┘
+│ BedSize         │             │
+│ CabType         │             │
+└─────────────────┘             │
+                                │
+┌─────────────────┐             │    ┌─────────────────┐
+│  BID_SEQUENCES  │             │    │ PARTITION_EVENTS│
+├─────────────────┤             │    ├─────────────────┤
+│ AuctionId (PK)  │◄────────────┘    │ Id (PK)         │
+│ CurrentSequence │                  │ OriginBidRegion │
+│ LastUpdated     │                  │ AuctionRegion   │
+└─────────────────┘                  │ Status          │
+                                     │ CreatedAt       │
+                                     │ EndTime         │
+                                     └─────────────────┘
+```
+
+### Relationships:
+- **Vehicles** → **Auctions** (1:N) - One vehicle can have multiple auctions
+- **Auctions** → **Bids** (1:N) - One auction can have multiple bids
+- **Auctions** → **BidSequences** (1:1) - Each auction has one sequence counter
+- **PartitionEvents** - Standalone table tracking network partition history
+
+## Design Decisions
 
 ### Vehicle Storage
 

@@ -2,6 +2,119 @@
 
 The system runs in two regions (US-East and EU-West) that can communicate with each other, but sometimes the network connection fails. When that happens, each region keeps working independently and they sync up later.
 
+## System Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           DISTRIBUTED CAR AUCTION PLATFORM                          │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────┐    Network    ┌─────────────────────────────────┐
+│            US-EAST              │ ◄──────────►  │            EU-WEST              │
+│                                 │   (Can Fail)  │                                 │
+│  ┌─────────────────────────────┐│               │┌───────────────────────────────┐│
+│  │      Application Layer      ││               ││      Application Layer        ││
+│  │                             ││               ││                               ││
+│  │ ┌─────────────────────────┐ ││               ││ ┌─────────────────────────┐   ││
+│  │ │    AuctionService       │ ││               ││ │    AuctionService       │   ││
+│  │ │  - PlaceBid (Local: CP) │ ││               ││ │  - PlaceBid (Local: CP) │   ││
+│  │ │  - CreateAuction (CP)   │ ││               ││ │  - CreateAuction (CP)   │   ││
+│  │ │  - Reconciliation       │ ││               ││ │  - Reconciliation       │   ││
+│  │ └─────────────────────────┘ ││               ││ └─────────────────────────┘   ││
+│  │                             ││               ││                               ││
+│  │ ┌─────────────────────────┐ ││               ││ ┌─────────────────────────┐   ││
+│  │ │   RegionCoordinator     │ ││               ││ │   RegionCoordinator     │   ││
+│  │ │  - Partition Detection  │ ││               ││ │  - Partition Detection  │   ││
+│  │ │  - Cross-Region Calls   │ ││               ││ │  - Cross-Region Calls   │   ││
+│  │ └─────────────────────────┘ ││               ││ └─────────────────────────┘   ││
+│  │                             ││               ││                               ││
+│  │ ┌─────────────────────────┐ ││               ││ ┌─────────────────────────┐   ││
+│  │ │   ConflictResolver      │ ││               ││ │   ConflictResolver      │   ││
+│  │ │  - Bid Ordering         │ ││               ││ │  - Bid Ordering         │   ││
+│  │ │  - Winner Selection     │ ││               ││ │  - Winner Selection     │   ││
+│  │ └─────────────────────────┘ ││               ││ └─────────────────────────┘   ││
+│  └─────────────────────────────┘│               │└───────────────────────────────┘│
+│                                 │               │                                 │
+│  ┌─────────────────────────────┐│               │┌───────────────────────────────┐│
+│  │       Domain Layer          ││               ││       Domain Layer            ││
+│  │                             ││               ││                               ││
+│  │ ┌─────────────────────────┐ ││               ││ ┌─────────────────────────┐   ││
+│  │ │    Domain Models        │ ││               ││ │    Domain Models        │   ││
+│  │ │  - Auction (States)     │ ││               ││ │  - Auction (States)     │   ││
+│  │ │  - Bid (Sequence)       │ ││               ││ │  - Bid (Sequence)       │   ││
+│  │ │  - Vehicle (TPH)        │ ││               ││ │  - Vehicle (TPH)        │   ││
+│  │ │  - PartitionEvent       │ ││               ││ │  - PartitionEvent       │   ││
+│  │ └─────────────────────────┘ ││               ││ └─────────────────────────┘   ││
+│  │                             ││               ││                               ││
+│  │ ┌─────────────────────────┐ ││               ││ ┌─────────────────────────┐   ││
+│  │ │      Abstractions       │ ││               ││ │      Abstractions       │   ││
+│  │ │  - Service Interfaces   │ ││               ││ │  - Service Interfaces   │   ││
+│  │ │  - Repository Interfaces│ ││               ││ │  - Repository Interfaces│   ││
+│  │ │  - Requests & Results   │ ││               ││ │  - Requests & Results   │   ││
+│  │ └─────────────────────────┘ ││               ││ └─────────────────────────┘   ││
+│  └─────────────────────────────┘│               │└───────────────────────────────┘│
+│                                 │               │                                 │
+│  ┌─────────────────────────────┐│               │┌───────────────────────────────┐│
+│  │    Infrastructure Layer     ││               ││    Infrastructure Layer       ││
+│  │                             ││               ││                               ││
+│  │ ┌─────────────────────────┐ ││               ││ ┌─────────────────────────┐   ││
+│  │ │     Repositories        │ ││               ││ │     Repositories        │   ││
+│  │ │  - AuctionRepository    │ ││               ││ │  - AuctionRepository    │   ││
+│  │ │  - BidRepository        │ ││               ││ │  - BidRepository        │   ││
+│  │ │  - VehicleRepository    │ ││               ││ │  - VehicleRepository    │   ││
+│  │ │  - PartitionEventRepo   │ ││               ││ │  - PartitionEventRepo   │   ││
+│  │ └─────────────────────────┘ ││               ││ └─────────────────────────┘   ││
+│  │                             ││               ││                               ││
+│  │ ┌─────────────────────────┐ ││               ││ ┌─────────────────────────┐   ││
+│  │ │      Simulators         │ ││               ││ │      Simulators         │   ││
+│  │ │  - PartitionSimulator   │ ││               ││ │  - PartitionSimulator   │   ││
+│  │ │  - NetworkSimulator     │ ││               ││ │  - NetworkSimulator     │   ││
+│  │ └─────────────────────────┘ ││               ││ └─────────────────────────┘   ││
+│  │                             ││               ││                               ││
+│  │ ┌─────────────────────────┐ ││               ││ ┌─────────────────────────┐   ││
+│  │ │      Database           │ ││               ││ │      Database           │   ││
+│  │ │  - Vehicles             │ ││               ││ │  - Vehicles             │   ││
+│  │ │  - Auctions (Version)   │ ││               ││ │  - Auctions (Version)   │   ││
+│  │ │  - Bids (Sequence)      │ ││               ││ │  - Bids (Sequence)      │   ││
+│  │ │  - PartitionEvents      │ ││               ││ │  - PartitionEvents      │   ││
+│  │ └─────────────────────────┘ ││               ││ └─────────────────────────┘   ││
+│  └─────────────────────────────┘│               │└───────────────────────────────┘│
+└─────────────────────────────────┘               └─────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│                            PARTITION HANDLING FLOW                                │
+└───────────────────────────────────────────────────────────────────────────────────┘
+
+    Normal Operation       Partition Detected           Partition Healed
+         │                         │                           │
+         ▼                         ▼                           ▼
+┌─────────────────┐      ┌─────────────────┐         ┌──────────────────┐
+│ Cross-region    │      │ Queue cross-    │         │ Process all      │
+│ bids process    │ ───► │ region bids     │ ──────► │ queued bids      │
+│ immediately     │      │ for later       │         │ deterministically│
+└─────────────────┘      └─────────────────┘         └──────────────────┘
+         │                         │                           │
+         ▼                         ▼                           ▼
+┌─────────────────┐      ┌─────────────────┐         ┌──────────────────┐
+│ Local bids      │      │ Local bids      │         │ Resume normal    │
+│ continue        │      │ rejected during │         │ operations       │
+│ normally        │      │ partition       │         │                  │
+└─────────────────┘      └─────────────────┘         └──────────────────┘
+
+
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│                              CAP THEOREM DECISIONS                                │
+├───────────────────────────────────────────────────────────────────────────────────┤
+│ Operation          │ CAP Choice │ Behavior During Partition                       │
+├───────────────────────────────────────────────────────────────────────────────────┤
+│ Create Auction     │    CP      │ Fail if other region unreachable                │
+│ Local Bid          │    CP      │ Process immediately with strong consistency     │
+│ Cross-Region Bid   │    AP      │ Queue for reconciliation (availability first)   │
+│ View Auction       │ Config     │ Strong for bidding, Eventual for browsing       │
+│ End Auction        │    CP      │ Pause until partition heals, then reconcile     │
+└───────────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Database Schema
 
 Five main tables:
@@ -65,14 +178,6 @@ When the partition heals:
 ## Event Handling
 
 When a partition is detected, the system automatically pauses auctions that would be affected. When the partition heals, it triggers reconciliation for any auctions that had queued bids.
-
-## Performance Targets
-
-- Bid processing under 200ms (95th percentile)
-- Support 1000+ concurrent auctions per region
-- Handle 10,000 concurrent users per region
-- Maintain 99.9% availability even during network issues
-- Zero bid loss during partitions
 
 ## Challenge Requirements Met
 

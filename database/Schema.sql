@@ -78,7 +78,7 @@ CREATE TABLE Bids (
     
     INDEX IX_Bids_AuctionId_Sequence (AuctionId, Sequence),
     INDEX IX_Bids_AuctionId_CreatedAt (AuctionId, CreatedAt),
-    INDEX IX_Bids_Partition (AuctionId, IsDuringPartition),
+    INDEX IX_Bids_Partition (AuctionId, IsDuringPartition, CreatedAt),
     INDEX IX_Bids_BidderId (BidderId)
 );
 
@@ -105,9 +105,9 @@ CREATE TABLE PartitionEvents (
     CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     EndTime DATETIME2 NULL,
     
-    INDEX IX_PartitionEvents_Status (Status),
+    INDEX IX_PartitionEvents_Status_CreatedAt (Status, CreatedAt DESC),
     INDEX IX_PartitionEvents_AuctionRegion (AuctionRegion),
-    INDEX IX_PartitionEvents_Status_AuctionRegion (Status, AuctionRegion)
+    INDEX IX_PartitionEvents_Status_AuctionRegion_CreatedAt (Status, AuctionRegion, CreatedAt DESC)
 );
 
 -- ============================================
