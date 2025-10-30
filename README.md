@@ -14,6 +14,16 @@ dotnet test
 dotnet test --filter "ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequirements"
 ```
 
+## Continuous Integration
+
+The project includes a GitHub Actions CI/CD pipeline that automatically:
+- Builds the solution on every push and pull request
+- Runs all unit and integration tests
+- Ensures code quality and test coverage
+- Validates the distributed scenarios work correctly
+
+The pipeline configuration is located at `.github/workflows/ci.yml`.
+
 ### Project Structure
 
 ```

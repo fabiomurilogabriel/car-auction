@@ -17,9 +17,9 @@ dotnet test --filter "ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequi
 **Unit Tests** - Individual components like auction state machines, bid validation, and conflict resolution
 
 **Integration Tests** - Full scenarios including:
-- The main 5-minute partition challenge
+- The main 5-minute partition challenge(configured to have some seconds)
 - Different CAP theorem trade-offs
-- Performance under load (1000+ auctions, 10K users)
+- Performance under load
 - Various network partition scenarios
 
 ## Challenge Requirements
@@ -41,14 +41,6 @@ The `ExactChallengeScenario` test simulates the exact scenario from the challeng
 6. Partition heals
 7. All bids get reconciled properly
 8. No data is lost
-
-## Performance Tests
-
-We validate that the system can handle:
-- Bid processing under 200ms (95th percentile)
-- 1000+ concurrent auctions per region
-- 10,000 concurrent users per region
-- 99.9% availability even during network issues
 
 ## Key Algorithms
 
