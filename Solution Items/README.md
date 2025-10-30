@@ -43,10 +43,19 @@ sqlcmd -S localhost -d CarAuctionDB -i database/Schema.sql
 
 ## Solution Architecture
 
+📋 **[Complete Technical Architecture →](ARCHITECTURE.md)**
+
+🧪 **[Detailed Test Coverage →](TESTS_SUMMARY.md)**
+
+🔬 **[Integration Tests Summary →](INTEGRATION_TESTS_SUMMARY.md)**
+
 ### Project Structure
 
 ```
 CarAuction/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                  # GitHub Actions CI/CD pipeline
 ├── src/
 │   ├── CarAuction.Domain/          # Domain models and abstractions
 │   ├── CarAuction.Application/     # Application services and business logic
@@ -57,7 +66,13 @@ CarAuction/
 ├── database/
 │   ├── Schema.sql                  # Complete database schema
 │   └── README.md                   # Database design documentation
-└── coverage-report/                # Test coverage reports
+├── Solution Items/
+│   ├── README.md                   # This file - project overview
+│   ├── ARCHITECTURE.md             # Technical architecture documentation
+│   ├── TESTS_SUMMARY.md            # Comprehensive test coverage summary
+│   └── INTEGRATION_TESTS_SUMMARY.md # Integration tests detailed summary
+├── coverage-report/                # Test coverage reports
+└── CarAuction.sln                  # Solution file
 ```
 
 ### Main Components
@@ -90,25 +105,6 @@ CarAuction/
 - Vehicle validation must be atomic (one vehicle = one active auction)
 - Creation failure is preferable to inconsistencies
 
-**Implementation:**
-```csharp
-public async Task<Auction> CreateAuctionAsync(CreateAuctionRequest request)
-{
-    using var transaction = await _context.Database.BeginTransactionAsync();
-    
-    // Atomic validation - fails if vehicle already has active auction
-    var existingAuction = await _auctionRepository.GetActiveAuctionByVehicleAsync(request.VehicleId);
-    if (existingAuction != null)
-        throw new BusinessException("Vehicle already has active auction");
-    
-    var auction = new Auction(request.VehicleId, request.Region, ...);
-    await _auctionRepository.AddAsync(auction);
-    await transaction.CommitAsync();
-    
-    return auction;
-}
-```
-
 ### 2. Placing a Bid: **Hybrid (CP local, AP cross-region)**
 
 **Local Bids (same region):** **CP**
@@ -121,30 +117,6 @@ public async Task<Auction> CreateAuctionAsync(CreateAuctionRequest request)
 - Bids queued for later reconciliation
 - User receives "bid queued" confirmation
 
-**Implementation:**
-```csharp
-public async Task<BidResult> PlaceBidAsync(Guid auctionId, BidRequest request)
-{
-    var auction = await _auctionRepository.GetWithBidsAsync(auctionId);
-    var currentRegion = await _simulator.GetCurrentRegionAsync();
-    var isPartitioned = await _regionCoordinator.GetPartitionStatusAsync() == PartitionStatus.Partitioned;
-    
-    // Decision based on region and partition status
-    if (auction.Region == currentRegion && !isPartitioned)
-    {
-        // CP: Strong local consistency
-        return await ProcessStrongConsistencyBid(auction, request);
-    }
-    else if (auction.Region != currentRegion && isPartitioned)
-    {
-        // AP: Availability during partition
-        return await ProcessEventualConsistencyBid(auction, request);
-    }
-    
-    return BuildErrorResult("Region not reachable");
-}
-```
-
 ### 3. Ending an Auction: **CP (Consistency + Partition Tolerance)**
 
 **During Partitions:**
@@ -156,32 +128,6 @@ public async Task<BidResult> PlaceBidAsync(Guid auctionId, BidRequest request)
 - Complete reconciliation before determining winner
 - All bids are ordered deterministically
 - Final result is consistent across all regions
-
-**Implementation:**
-```csharp
-public async Task<AuctionResult> EndAuctionAsync(Guid auctionId)
-{
-    var auction = await _auctionRepository.GetWithBidsAsync(auctionId);
-    
-    // If there's an active partition, pause auction
-    var partitionStatus = await _regionCoordinator.GetPartitionStatusAsync();
-    if (partitionStatus == PartitionStatus.Partitioned)
-    {
-        auction.Pause();
-        await _auctionRepository.UpdateAsync(auction);
-        return BuildResult(false, "Auction paused due to network partition");
-    }
-    
-    // Reconcile before finalizing
-    await _conflictResolver.ReconcileAuctionAsync(auctionId);
-    
-    // Finalize with guaranteed consistency
-    auction.End();
-    await _auctionRepository.UpdateAsync(auction);
-    
-    return BuildSuccessResult(auction);
-}
-```
 
 ### 4. Viewing Auction Status: **Configurable (Strong vs Eventual)**
 
@@ -196,27 +142,6 @@ public async Task<AuctionResult> EndAuctionAsync(Guid auctionId)
 - View for general **browsing**
 - Auction lists for **discovery**
 - Queries with `ConsistencyLevel.Eventual`
-
-**Implementation:**
-```csharp
-public async Task<AuctionView> GetAuctionAsync(Guid auctionId, ConsistencyLevel level = ConsistencyLevel.Eventual)
-{
-    switch (level)
-    {
-        case ConsistencyLevel.Strong:
-            // CP: Latest data, may fail during partition
-            await _regionCoordinator.EnsureRegionConnectivityAsync();
-            return await _auctionRepository.GetWithLatestBidsAsync(auctionId);
-            
-        case ConsistencyLevel.Eventual:
-            // AP: Local data, always available
-            return await _auctionRepository.GetFromLocalCacheAsync(auctionId);
-            
-        default:
-            throw new ArgumentException("Invalid consistency level");
-    }
-}
-```
 
 ## CAP Decisions Summary
 
@@ -270,34 +195,15 @@ Post-partition:
 - **Optimized indexes** for distributed queries
 - **Partition tracking** for auditing
 
-### Critical Transactions:
-```sql
--- Place Bid (ACID)
-BEGIN TRANSACTION
-  UPDATE BidSequences SET CurrentSequence = CurrentSequence + 1 WHERE AuctionId = @auctionId
-  INSERT INTO Bids (...)
-  UPDATE Auctions SET CurrentPrice = @amount, Version = Version + 1 WHERE Id = @auctionId AND Version = @expectedVersion
-COMMIT
+## 📚 Documentation
 
--- Reconciliation (ACID)
-BEGIN TRANSACTION
-  SELECT * FROM Bids WHERE AuctionId = @auctionId AND IsDuringPartition = 1
-  -- Apply conflict resolution rules
-  UPDATE Auctions SET WinningBidderId = @winnerId, CurrentPrice = @finalPrice
-  UPDATE Bids SET IsAccepted = @accepted WHERE Id IN (...)
-COMMIT
-```
+- **[Technical Architecture](./ARCHITECTURE.md)** - Complete system design, database schema, and algorithms
+- **[Test Summary](./TESTS_SUMMARY.md)** - Comprehensive test coverage and validation
+- **[Integration Tests](./INTEGRATION_TESTS_SUMMARY.md)** - Detailed integration test scenarios
+- **[Database Design](../database/README.md)** - Database schema and design decisions
 
-## Performance Metrics
+## 🚀 Quick Links
 
-### Requirements Met:
-- ✅ < 200ms bid processing time (p95)
-- ✅ Support for 1000+ concurrent auctions per region
-- ✅ 99.9% availability per region
-- ✅ Support for 10,000 concurrent users per region
-
-### Implemented Optimizations:
-- Composite indexes for frequent queries
-- Optimistic version control (no locks)
-- Efficient atomic sequencing
-- Region-optimized queries
+- **Main Challenge Test**: `dotnet test --filter "ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequirements"`
+- **Performance Tests**: `dotnet test --filter "PerformanceAndConcurrencyTests"`
+- **CAP Consistency Tests**: `dotnet test --filter "CAPConsistencyTests"`
