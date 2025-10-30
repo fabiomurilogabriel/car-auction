@@ -197,8 +197,8 @@ Post-partition:
 
 ## 📚 Documentation
 
-- **[Technical Architecture](./Solution%20Items/ARCHITECTURE.md)** - Complete system design, database schema, and algorithms
-- **[Test Summary](./Solution%20Items/TESTS_SUMMARY.md)** - Comprehensive test coverage and validation
+- **[Technical Architecture](https://github.com/fabiomurilogabriel/car-auction/blob/main/Solution%20Items/ARCHITECTURE.md)** - Complete system design, database schema, and algorithms
+- **[Test Summary](https://github.com/fabiomurilogabriel/car-auction/blob/main/Solution%20Items/TESTS_SUMMARY.md)** - Comprehensive test coverage and validation
 - **[Integration Tests](./INTEGRATION_TESTS_SUMMARY.md)** - Detailed integration test scenarios
 - **[Database Design](./database/README.md)** - Database schema and design decisions
 

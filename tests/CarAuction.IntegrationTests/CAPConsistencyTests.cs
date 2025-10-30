@@ -5,15 +5,9 @@ using CarAuction.Domain.Models.Auctions;
 using CarAuction.Infrastructure.Data.Repositories;
 using CarAuction.Infrastructure.Services;
 using CarAuction.IntegrationTests.Helpers;
-using Xunit;
 
 namespace CarAuction.IntegrationTests
 {
-    /// <summary>
-    /// Testes que demonstram as escolhas do teorema CAP implementadas no sistema:
-    /// - CP (Consistency + Partition Tolerance): Lances locais, criação de leilões
-    /// - AP (Availability + Partition Tolerance): Lances cross-region durante partições
-    /// </summary>
     public class CAPConsistencyTests
     {
         [Fact]
@@ -73,8 +67,6 @@ namespace CarAuction.IntegrationTests
             var updatedAuction = await auctionService.GetAuctionAsync(auction.Id, ConsistencyLevel.Strong);
             Assert.Equal(11000m, updatedAuction.CurrentPrice);
             Assert.Equal(bidRequest.BidderId, updatedAuction.WinningBidderId);
-
-            Console.WriteLine("✅ CP (Strong Consistency): Lance local processado imediatamente");
         }
 
         [Fact]
@@ -139,8 +131,6 @@ namespace CarAuction.IntegrationTests
             var partitionBids = await bidRepo.GetBidsMadeDuringPartitionWithinAuctionDeadlineAsync(auction.Id, auction.EndTime);
             Assert.Single(partitionBids);
             Assert.Equal(12000m, partitionBids.First().Amount);
-
-            Console.WriteLine("✅ AP (Eventual Consistency): Lance cross-region enfileirado durante partição");
         }
 
         [Fact]
@@ -189,8 +179,6 @@ namespace CarAuction.IntegrationTests
             // Verificar que BidSequence foi criada atomicamente
             var sequence = await bidRepo.GetNextSequenceAsync(auction.Id);
             Assert.Equal(1, sequence);
-
-            Console.WriteLine("✅ CP (Strong Consistency): Criação de leilão sempre consistente");
         }
 
         [Fact]
@@ -237,9 +225,6 @@ namespace CarAuction.IntegrationTests
             // Eventual Consistency: Dados básicos, sem lances
             var eventualRead = await auctionService.GetAuctionAsync(auction.Id, ConsistencyLevel.Eventual);
             Assert.NotNull(eventualRead);
-            // Em eventual consistency, pode não incluir todos os dados relacionados
-
-            Console.WriteLine("✅ Níveis de consistência implementados corretamente");
         }
     }
 }
