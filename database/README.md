@@ -1,134 +1,44 @@
-# Database Design - Distributed Car Auction Platform
+# Database Design
 
-## Overview
+The database is designed to handle auctions across two regions while dealing with network issues gracefully.
 
-This database schema supports a distributed auction system operating across two geographic regions (US-East and EU-West), with emphasis on handling network partitions and maintaining data consistency.
+## Key Decisions
 
-## Design Decisions
+### Vehicle Storage
 
-### 1. Vehicle Inheritance (Table-Per-Hierarchy)
+All vehicle types (Sedan, SUV, Hatchback, Truck) go in one table with a `Type` column. This keeps queries simple and fast, even though some columns will be null for certain vehicle types.
 
-We chose **TPH (Table-Per-Hierarchy)** instead of TPT (Table-Per-Type) for the following reasons:
+### Handling Concurrent Updates
 
-- **Performance**: Single table queries are faster than joins across multiple tables
-- **Simplicity**: All vehicle data in one location
-- **Flexibility**: Easy to add new vehicle types without schema changes
-- **Trade-off**: Some null columns, but acceptable given limited vehicle types (4 types)
+Each auction has a `Version` number that gets incremented on every update. This prevents two regions from overwriting each other's changes - if the version doesn't match what you expect, the update fails and we know there's a conflict to resolve.
 
-The `Type` column acts as a discriminator to distinguish between Sedan, SUV, Hatchback, and Truck.
+### Bid Ordering
 
-### 2. Optimistic Locking
+Each bid gets a sequence number (1, 2, 3...) per auction, plus a timestamp. This guarantees we can always figure out the correct order, even when bids come from different regions during network issues.
 
-The `Version` column in the Auctions table enables optimistic concurrency control:
+### Network Partition Tracking
 
-- Prevents lost updates when multiple regions update the same auction
-- Lightweight compared to pessimistic locking
-- Essential for distributed systems with network partitions
+We keep a log of when network partitions happen and how long they last. This helps with debugging and monitoring system health.
 
-**How it works:**
-UPDATE Auctions
-SET CurrentPrice = @newPrice, Version = Version + 1
-WHERE Id = @auctionId AND Version = @expectedVersion
+## Performance
 
-If the version doesn't match, the update fails and conflict resolution kicks in.
+Indexes are set up for the most common queries:
+- Finding active auctions in a region
+- Getting bids for an auction in order
+- Finding bids that happened during partitions
 
-### 3. Bid Ordering Strategy
+## CAP Trade-offs
 
-**Problem**: Cross-region bids need guaranteed ordering.
+During network partitions, we choose availability over consistency - each region keeps working independently. After the partition heals, we reconcile everything to get back to a consistent state.
 
-**Solution**: Combination of `Sequence` and `Timestamp`:
-- `Sequence`: Atomic counter per auction (via BidSequences table)
-- `Timestamp`: Fallback for tie-breaking during reconciliation
-- `IsDuringPartition`: Flags bids placed during network partition
+## Transactions
 
-### 4. Partition Tracking
+Three main operations need to be atomic:
 
-The `PartitionEvents` table provides:
-- Historical record of all network partitions
-- Current partition status for coordination
-- Duration tracking for SLA monitoring
+1. **Placing a bid** - Get sequence number, save bid, update auction price
+2. **Creating auction** - Create auction record and initialize bid counter
+3. **Reconciliation** - Process all queued bids and determine final winner
 
-## Indexes Strategy
+## Setup
 
-### High-frequency queries optimized:
-
-1. **Active auctions by region**
-INDEX IX_Auctions_Region_State (Region, State)
-
-2. **Bid ordering per auction**
-INDEX IX_Bids_AuctionId_Sequence (AuctionId, Sequence)
-
-3. **Partition bids lookup**
-INDEX IX_Bids_Partition (AuctionId, IsDuringPartition)
-
-## CAP Theorem Trade-offs
-
-This design prioritizes **AP (Availability + Partition Tolerance)** with eventual consistency:
-
-- **During partition**: Each region accepts bids independently
-- **After partition**: Reconciliation process resolves conflicts using timestamp + sequence
-- **Consistency level**: Configurable (strong vs eventual) via application layer
-
-## Transaction Boundaries
-
-### Critical transactions requiring ACID:
-
-1. **Placing a bid**:
-BEGIN TRANSACTION
-- Get next sequence (BidSequences)
-- Insert bid (Bids)
-- Update auction price (Auctions with version check)
-COMMIT
-
-
-2. **Creating auction**:
-BEGIN TRANSACTION
-- Insert auction (Auctions)
-- Initialize bid sequence (BidSequences)
-COMMIT
-
-text
-
-3. **Reconciliation** (post-partition):
-BEGIN TRANSACTION
-- Get all partition bids
-- Determine winner (conflict resolution)
-- Update auction final state
-- Mark bids as accepted/rejected
-COMMIT
-
-text
-
-## Schema Evolution
-
-Future considerations:
-
-- **Audit log table**: Track all state changes
-- **Read replicas**: Region-specific read-only copies
-- **Sharding strategy**: Partition by Region column if scale requires
-
-## Performance Estimates
-
-Based on requirements (1000+ concurrent auctions, 10K users per region):
-
-- **Expected bid rate**: ~500 bids/second peak
-- **Storage growth**: ~1GB/month with typical auction volume
-- **Query performance**: <50ms for indexed lookups
-
-## Setup Instructions
-
-### SQL Server:
-sqlcmd -S localhost -d AuctionDB -i Schema.sql
-
-text
-
-### EF Core In-Memory (for tests):
-var options = new DbContextOptionsBuilder<AuctionDbContext>()
-.UseInMemoryDatabase("AuctionTest")
-.Options;
-
-text
-
----
-
-**Related Challenge Requirements**: Database Design, Transaction boundaries, CAP theorem implementation
+For production, you'd run the Schema.sql file against SQL Server. For tests, we use Entity Framework's in-memory database which is much simpler to set up.

@@ -1,44 +1,17 @@
-# Distributed Car Auction Platform - Senior Engineering Challenge
+# Car Auction Platform
 
-## Overview
+A distributed auction system built to handle network partitions gracefully. The system operates across US-East and EU-West regions, making smart trade-offs between consistency and availability based on the CAP theorem.
 
-This is a complete implementation of a distributed car auction system that operates in two geographical regions (US-East and EU-West), with special focus on network partition handling and CAP theorem trade-offs.
+## Getting Started
 
-## How to Run
+You'll need .NET 8.0 SDK installed. The tests use in-memory databases, so no SQL Server setup required.
 
-### Prerequisites
-- .NET 8.0 SDK
-- SQL Server (or InMemory for tests)
-
-### Running Tests
 ```bash
-# All tests
+# Run all tests
 dotnet test
 
-# Specific challenge scenario
+# Run the main challenge scenario
 dotnet test --filter "ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequirements"
-
-# With code coverage
-dotnet test --collect:"XPlat Code Coverage"
-
-# Generate HTML coverage report (optional)
-dotnet tool install -g dotnet-reportgenerator-globaltool
-reportgenerator -reports:"tests/**/coverage.cobertura.xml" -targetdir:"coverage-report" -reporttypes:Html
-```
-
-### Install XPlat Code Coverage
-```bash
-# Install coverage tool (if not already installed)
-dotnet add package coverlet.collector
-
-# Or install globally
-dotnet tool install -g dotnet-coverage
-```
-
-### Database Setup
-```bash
-# SQL Server
-sqlcmd -S localhost -d CarAuctionDB -i database/Schema.sql
 ```
 
 ### Project Structure
@@ -67,135 +40,70 @@ CarAuction/
 └── CarAuction.sln                   # Solution file
 ```
 
-### Main Components
+## How It Works
 
-#### 1. **Domain Models**
-- **Vehicle**: Base class with TPH inheritance (Sedan, SUV, Hatchback, Truck)
-- **Auction**: State machine with optimistic version control
-- **Bid**: Bids with sequencing and origin tracking
-- **PartitionEvent**: Partition event tracking
+The system has three main parts:
 
-#### 2. **Distributed Services**
-- **AuctionService**: Auction and bid management
-- **RegionCoordinator**: Inter-region coordination and partition detection
-- **BidOrderingService**: Bid ordering guarantees
-- **ConflictResolver**: Post-partition conflict resolution
+**Domain Models** - Vehicles, Auctions, and Bids with proper state management
+**Services** - Handle auction logic, region coordination, and conflict resolution  
+**Data Layer** - Repositories with Entity Framework and optimized queries
 
-#### 3. **Data Layer**
-- **Repositories**: Repository pattern with Entity Framework
-- **AuctionDbContext**: Context with optimized configurations
-- **BidSequence**: Atomic sequence generation
+## Domain Decisions
 
-## Consistency Decisions (CAP Theorem)
+Some key design choices that make the system work better:
 
-### 1. Creating an Auction: **CP (Consistency + Partition Tolerance)**
+**Vehicle Types** - You can't create a generic "Vehicle" - it has to be a specific type like Sedan, SUV, Hatchback, or Truck. This prevents mistakes and ensures every vehicle has the right properties.
 
-**Decision:** Strong Consistency
+**Auction States** - Auctions follow a clear path: Draft → Active → Paused → Ended. Once an auction moves to the next state, it can't go backwards (except pausing during network issues).
 
-**Why:**
-- Avoiding duplicate auctions is critical for business integrity
-- Vehicle validation must be atomic (one vehicle = one active auction)
-- Creation failure is preferable to inconsistencies
+**Bid Ordering** - Every bid gets a sequence number (1, 2, 3...) so we always know the exact order, even when bids come from different regions at nearly the same time.
 
-### 2. Placing a Bid: **Hybrid (CP local, AP cross-region)**
+**Region Tracking** - Each bid remembers which region it came from. This helps us make the right consistency decisions and resolve conflicts fairly.
 
-**Local Bids (same region):** **CP**
-- Strong consistency within the region
-- ACID transactions with optimistic version control
-- Immediate failure if conflict detected
+**Immutable Bids** - Once a bid is placed, its core details (amount, bidder, timestamp) can't be changed. We can only mark it as accepted/rejected during conflict resolution.
 
-**Cross-Region Bids:** **AP during partitions**
-- Availability priority during network partitions
-- Bids queued for later reconciliation
-- User receives "bid queued" confirmation
+**Bid Winner Selection** - When multiple bids compete (especially after network partitions), we use a clear priority system: highest amount wins first, then earliest timestamp if tied, then lowest sequence number as final tiebreaker. This ensures the same winner every time, no matter which region processes the reconciliation.
 
-### 3. Ending an Auction: **CP (Consistency + Partition Tolerance)**
+## CAP Theorem Decisions
 
-**During Partitions:**
-- Auctions are **paused** until complete reconciliation
-- No auction ends with inconsistent data
-- Final result integrity is guaranteed
+Different operations make different trade-offs:
 
-**Post-Partition:**
-- Complete reconciliation before determining winner
-- All bids are ordered deterministically
-- Final result is consistent across all regions
+**Creating Auctions** - Strong consistency (CP) to avoid duplicates  
+**Local Bids** - Strong consistency (CP) within the same region  
+**Cross-Region Bids** - Availability (AP) during network partitions  
+**Viewing Auctions** - Configurable based on use case
 
-### 4. Viewing Auction Status: **Configurable (Strong vs Eventual)**
+## Network Partition Handling
 
-**Different levels based on context:**
+When regions can't communicate:
+- Local bids continue working normally
+- Cross-region bids get queued for later
+- Auctions pause if they're supposed to end during the partition
 
-**Strong Consistency (CP):**
-- View for **placing final bid** (critical decision)
-- View for **administrators** (auditing)
-- Queries with `ConsistencyLevel.Strong`
+After the partition heals:
+- All queued bids are processed in order
+- Conflicts are resolved deterministically
+- No bids are ever lost
 
-**Eventual Consistency (AP):**
-- View for general **browsing**
-- Auction lists for **discovery**
-- Queries with `ConsistencyLevel.Eventual`
+## The Challenge Scenario
 
-## CAP Decisions Summary
+The main test simulates a 5-minute network partition between US-East and EU-West:
 
-| Operation | CAP Choice | Justification |
-|----------|-------------|---------------|
-| **Create Auction** | **CP** | Critical integrity - avoid duplicates |
-| **Local Bid** | **CP** | Strong consistency within region |
-| **Cross-Region Bid** | **AP** | Availability during partitions |
-| **End Auction** | **CP** | Final result must be consistent |
-| **View (Critical)** | **CP** | Important decisions need current data |
-| **View (Browse)** | **AP** | User experience - always available |
+- EU user bids on US auction → Gets queued
+- US user bids on same auction → Processes immediately  
+- Auction ending during partition → Waits for reconciliation
+- After partition heals → All bids processed, winner determined fairly
 
-### Partition Strategy
+## Database
 
-**During Partition:**
-- ✅ Local bids continue normally (CP)
-- ✅ Cross-region bids are queued (AP)
-- ✅ Auctions scheduled to end are paused
-- ✅ Partition events are logged for auditing
+Using Entity Framework with:
+- Table-per-hierarchy for different vehicle types
+- Optimistic locking to handle concurrent updates
+- Sequence numbers to guarantee bid ordering
+- Indexes optimized for the most common queries
 
-**Post-Partition (Reconciliation):**
-- ✅ All bids are ordered by timestamp + sequence
-- ✅ Conflicts resolved deterministically
-- ✅ Final state consistent across regions
-- ✅ Complete audit trail maintained
-- ✅ No bids are lost
+## More Details
 
-## Implemented Partition Scenario
-
-### Specific Problem Solved:
-```
-Network Partition: Connection between US-East and EU-West is lost for 5 minutes
-
-During partition:
-✅ EU user tries bid on US auction → Queued for reconciliation
-✅ US user bids on same US auction → Processed normally  
-✅ Auction scheduled to end during partition → Paused until reconciliation
-
-Post-partition:
-✅ No bids are lost
-✅ Winner determined deterministically
-✅ Auction integrity maintained
-```
-
-## Database Design
-
-### Main Features:
-- **TPH (Table-Per-Hierarchy)** for vehicle inheritance
-- **Optimistic version control** for auctions
-- **Atomic sequencing** for bids
-- **Optimized indexes** for distributed queries
-- **Partition tracking** for auditing
-
-## 📚 Documentation
-
-- **[Technical Architecture](https://github.com/fabiomurilogabriel/car-auction/blob/main/Solution%20Items/ARCHITECTURE.md)** - Complete system design, database schema, and algorithms
-- **[Test Summary](https://github.com/fabiomurilogabriel/car-auction/blob/main/Solution%20Items/TESTS_SUMMARY.md)** - Comprehensive test coverage and validation
-- **[Integration Tests](./INTEGRATION_TESTS_SUMMARY.md)** - Detailed integration test scenarios
-- **[Database Design](./database/README.md)** - Database schema and design decisions
-
-## 🚀 Quick Links
-
-- **Main Challenge Test**: `dotnet test --filter "ExactChallengeScenario_5MinutePartition_ShouldMeetAllRequirements"`
-- **Performance Tests**: `dotnet test --filter "PerformanceAndConcurrencyTests"`
-- **CAP Consistency Tests**: `dotnet test --filter "CAPConsistencyTests"`
+- **[Architecture](https://github.com/fabiomurilogabriel/car-auction/blob/main/Solution%20Items/ARCHITECTURE.md)** - Technical deep dive
+- **[Tests](https://github.com/fabiomurilogabriel/car-auction/blob/main/Solution%20Items/TESTS_SUMMARY.md)** - Test coverage summary
+- **[Database](https://github.com/fabiomurilogabriel/car-auction/tree/main/database)** - Schema and design decisions
