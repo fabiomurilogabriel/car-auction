@@ -44,11 +44,11 @@ CarAuction/
 
 The system has three main parts:
 
-**Domain Models** - Vehicles, Auctions, and Bids with proper state management
+**Domain** - Vehicles, Auctions, and Bids with proper state management and abstractions as well
 
-**Services** - Handle auction logic, region coordination, and conflict resolution  
+**Application** - Handle auction logic, region coordination, and conflict resolution  
 
-**Data Layer** - Repositories with Entity Framework and optimized queries
+**Infractruture Layer** - Repositories with Entity Framework and optimized queries, plus simulators for network partitions and multi-region behavior
 
 ## Domain Decisions
 
@@ -74,7 +74,7 @@ Different operations make different trade-offs based on what matters most:
 We chose consistency over availability because duplicate auctions would be a disaster. If someone tries to create an auction and the other region is unreachable, we'd rather fail the request than risk having two auctions for the same vehicle. Better safe than sorry.
 
 **Placing Bids - It Depends**
-- *Local bids (same region):* Strong consistency (CP) - these get processed immediately with full ACID transactions
+- *Local bids (same region):* Strong consistency (CP) - these get processed immediately, but if we have a partition, we might reject them
 - *Cross-region bids:* Availability (AP) - during network partitions, we queue these bids and process them later. Users get a "bid received" confirmation, and we sort everything out when the network heals
 
 **Ending Auctions (CP - Strong Consistency)**
