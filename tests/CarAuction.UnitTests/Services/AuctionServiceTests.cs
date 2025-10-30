@@ -40,7 +40,6 @@ namespace CarAuction.UnitTests.Services
         [Fact]
         public async Task CreateAuctionAsync_ShouldCreateAndStartAuction()
         {
-            // Arrange
             var request = new CreateAuctionRequest
             {
                 VehicleId = Guid.NewGuid(),
@@ -54,10 +53,8 @@ namespace CarAuction.UnitTests.Services
             _mockAuctionRepository.Setup(x => x.CreateAsync(It.IsAny<Auction>()))
                 .Returns(Task.FromResult(Guid.NewGuid()));
 
-            // Act
             var result = await _auctionService.CreateAuctionAsync(request);
 
-            // Assert
             Assert.NotNull(result);
             Assert.Equal(request.VehicleId, result.VehicleId);
             Assert.Equal(request.Region, result.Region);
@@ -69,7 +66,6 @@ namespace CarAuction.UnitTests.Services
         [Fact]
         public async Task PlaceBidAsync_WithNonExistentAuction_ShouldReturnFailure()
         {
-            // Arrange
             var auctionId = Guid.NewGuid();
             var bidRequest = new BidRequest
             {
@@ -80,10 +76,8 @@ namespace CarAuction.UnitTests.Services
             _mockAuctionRepository.Setup(x => x.GetWithBidsAsync(auctionId))
                 .ReturnsAsync((Auction)null);
 
-            // Act
             var result = await _auctionService.PlaceBidAsync(auctionId, bidRequest);
 
-            // Assert
             Assert.False(result.Success);
             Assert.Equal("Auction not found", result.Message);
         }
@@ -91,7 +85,6 @@ namespace CarAuction.UnitTests.Services
         [Fact]
         public async Task PlaceBidAsync_WithExpiredAuction_ShouldEndAuction()
         {
-            // Arrange
             var auction = CreateExpiredAuction();
             
             var bidRequest = new BidRequest
@@ -105,10 +98,8 @@ namespace CarAuction.UnitTests.Services
             _mockAuctionRepository.Setup(x => x.UpdateAsync(It.IsAny<Auction>()))
                 .ReturnsAsync(true);
 
-            // Act
             var result = await _auctionService.PlaceBidAsync(auction.Id, bidRequest);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal("Auction ended successfully", result.Message);
             _mockAuctionRepository.Verify(x => x.UpdateAsync(It.IsAny<Auction>()), Times.Once);
@@ -117,17 +108,14 @@ namespace CarAuction.UnitTests.Services
         [Fact]
         public async Task GetAuctionAsync_WithStrongConsistency_ShouldCallGetWithBids()
         {
-            // Arrange
             var auctionId = Guid.NewGuid();
             var auction = CreateTestAuction();
 
             _mockAuctionRepository.Setup(x => x.GetWithBidsAsync(auctionId))
                 .ReturnsAsync(auction);
 
-            // Act
             var result = await _auctionService.GetAuctionAsync(auctionId, ConsistencyLevel.Strong);
 
-            // Assert
             Assert.NotNull(result);
             _mockAuctionRepository.Verify(x => x.GetWithBidsAsync(auctionId), Times.Once);
             _mockAuctionRepository.Verify(x => x.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
@@ -136,17 +124,14 @@ namespace CarAuction.UnitTests.Services
         [Fact]
         public async Task GetAuctionAsync_WithEventualConsistency_ShouldCallGetById()
         {
-            // Arrange
             var auctionId = Guid.NewGuid();
             var auction = CreateTestAuction();
 
             _mockAuctionRepository.Setup(x => x.GetByIdAsync(auctionId))
                 .ReturnsAsync(auction);
 
-            // Act
             var result = await _auctionService.GetAuctionAsync(auctionId, ConsistencyLevel.Eventual);
 
-            // Assert
             Assert.NotNull(result);
             _mockAuctionRepository.Verify(x => x.GetByIdAsync(auctionId), Times.Once);
             _mockAuctionRepository.Verify(x => x.GetWithBidsAsync(It.IsAny<Guid>()), Times.Never);
@@ -174,7 +159,7 @@ namespace CarAuction.UnitTests.Services
                 10000m,
                 15000m,
                 DateTime.UtcNow.AddHours(-2),
-                DateTime.UtcNow.AddHours(-1) // Expired 1 hour ago
+                DateTime.UtcNow.AddHours(-1)
             );
             auction.Start();
             return auction;
