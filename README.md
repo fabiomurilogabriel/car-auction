@@ -67,11 +67,11 @@ CarAuction/
 │   ├── Schema.sql                  # Complete database schema
 │   └── README.md                   # Database design documentation
 ├── Solution Items/
-│   ├── README.md                   # This file - project overview
 │   ├── ARCHITECTURE.md             # Technical architecture documentation
 │   ├── TESTS_SUMMARY.md            # Comprehensive test coverage summary
 │   └── INTEGRATION_TESTS_SUMMARY.md # Integration tests detailed summary
 ├── coverage-report/                # Test coverage reports
+├── README.md                   # This file - project overview
 └── CarAuction.sln                  # Solution file
 ```
 
@@ -197,10 +197,10 @@ Post-partition:
 
 ## 📚 Documentation
 
-- **[Technical Architecture](./ARCHITECTURE.md)** - Complete system design, database schema, and algorithms
-- **[Test Summary](./TESTS_SUMMARY.md)** - Comprehensive test coverage and validation
+- **[Technical Architecture](./Solution%20Items/ARCHITECTURE.md)** - Complete system design, database schema, and algorithms
+- **[Test Summary](./Solution%20Items/TESTS_SUMMARY.md)** - Comprehensive test coverage and validation
 - **[Integration Tests](./INTEGRATION_TESTS_SUMMARY.md)** - Detailed integration test scenarios
-- **[Database Design](../database/README.md)** - Database schema and design decisions
+- **[Database Design](./database/README.md)** - Database schema and design decisions
 
 ## 🚀 Quick Links
 
