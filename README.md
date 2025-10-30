@@ -41,38 +41,30 @@ dotnet tool install -g dotnet-coverage
 sqlcmd -S localhost -d CarAuctionDB -i database/Schema.sql
 ```
 
-## Solution Architecture
-
-📋 **[Complete Technical Architecture →](ARCHITECTURE.md)**
-
-🧪 **[Detailed Test Coverage →](TESTS_SUMMARY.md)**
-
-🔬 **[Integration Tests Summary →](INTEGRATION_TESTS_SUMMARY.md)**
-
 ### Project Structure
 
 ```
 CarAuction/
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                  # GitHub Actions CI/CD pipeline
+│       ├── ci.yml                   # GitHub Actions CI/CD pipeline
 ├── src/
-│   ├── CarAuction.Domain/          # Domain models and abstractions
-│   ├── CarAuction.Application/     # Application services and business logic
-│   └── CarAuction.Infrastructure/  # Repository implementations and simulators
+│   ├── CarAuction.Domain/           # Domain models and abstractions
+│   ├── CarAuction.Application/      # Application services and business logic
+│   └── CarAuction.Infrastructure/   # Repository implementations and simulators
 ├── tests/
-│   ├── CarAuction.UnitTests/       # Unit tests
+│   ├── CarAuction.UnitTests/        # Unit tests
 │   └── CarAuction.IntegrationTests/ # Integration tests and distributed scenarios
 ├── database/
-│   ├── Schema.sql                  # Complete database schema
-│   └── README.md                   # Database design documentation
+│   ├── Schema.sql                   # Complete database schema
+│   └── README.md                    # Database design documentation
 ├── Solution Items/
-│   ├── ARCHITECTURE.md             # Technical architecture documentation
-│   ├── TESTS_SUMMARY.md            # Comprehensive test coverage summary
+│   ├── ARCHITECTURE.md              # Technical architecture documentation
+│   ├── TESTS_SUMMARY.md             # Comprehensive test coverage summary
 │   └── INTEGRATION_TESTS_SUMMARY.md # Integration tests detailed summary
-├── coverage-report/                # Test coverage reports
-├── README.md                   # This file - project overview
-└── CarAuction.sln                  # Solution file
+├── coverage-report/                 # Test coverage reports
+├── README.md                        # This file - project overview
+└── CarAuction.sln                   # Solution file
 ```
 
 ### Main Components
